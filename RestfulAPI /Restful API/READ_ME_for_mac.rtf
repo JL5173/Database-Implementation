@@ -1,0 +1,182 @@
+{\rtf1\ansi\ansicpg936\cocoartf1561\cocoasubrtf600
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fnil\fcharset134 PingFangSC-Regular;\f2\fnil\fcharset0 Monaco;
+}
+{\colortbl;\red255\green255\blue255;\red0\green170\blue0;\red0\green0\blue0;\red0\green0\blue255;
+}
+{\*\expandedcolortbl;;\csgenericrgb\c0\c66667\c0;\cspthree\c0\c0\c0;\csgenericrgb\c0\c0\c100000;
+}
+\paperw11900\paperh16840\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 Introduction: \
+Conditions: lahman2017raw.sql (6 tables), python, workbench, postman\
+Notice: I add primary key and foreign key with alter table clicking originally.\
+            For convenience of your examination, I also wrote queries in CONSTRAIN.sql\
+1.After observation and analysis, I found that all tables except people and teams have \'91playerID\'92,\'92yearID\'92 and \'91teamID\'92, and \'91playerID\'92 is unique in people, combination of \'91yearID\'92 and \
+\'91teamID\'92 is unique in teams. Also, in those 4 tables( batting,appearances,managers,fielding), we could find responding people and teams in each record. Therefore, I gave each of those\
+4 tables Foreign keys, which can help us to find who they are or which team they are from in each record.\
+\
+2. For convenience of your read, I derivate six tables (people,batting,appearances,fielding,managers,teams),which are tables that you want us to modify.\
+Their primary keys and Foreign keys are (in order):\
+People: \'91playerID\'92       no foreign keys\
+Batting: \'91playerID\'92, \'91yearID\'92, \'91stint\'92, \'91teamID\'92   battingtopeople:\'92playerID\'92,\'92battingtoteams\'92:\'92yearID\'92,\'92teamID\'92\
+Appearances: \'91yearID\'92,\'92teamID\'92,\'92playerID\'92     \'91apptopeople\'92: \'91playerID\'92,\'92apptoteams\'92:\'92yearID\'92,\'92teamID\'92\
+Fielding: \'91playerID\'92,\'92yearID\'92,\'92stint\'92, \'91teamID\'92, \'91POS\'92,\'92InnOuts\'92, \'91PO\'92, \'92E\'92  \'91fieldingtopeople\'92:\'92playerID\'92,\'92fieldingtoteams\'92:\'92yearID\'92,\'92teamID\'92\
+Teams: \'91yearID\'92, \'91teamID\'92 no foreign keys\
+Managers:\'92playerID\'92,\'92yearID\'92,\'92teamID\'92,\'92inseason\'92 \'91managertopeople\'92:\'92playerID\'92, \'91managertoteams\'92:\'92yearID\'92,\'92teamID\'92\
+\
+3.Design Ideas:\
+a) For Path:\
+Base Resource: GET: we get parameters from request.args and transfer them to a dictionary. Then we can get results through query combined with function templateToWhereClause.\
+ 			 POST: we give a new record in the \'91body\'92 through postman, and our function can use json.load() to get new record and transfer them in to dictionary that we can deal with\
+Specific Resources: GET: we get primary keys from specific table first by query. And I matched values with primary keys and combine them into dictionaries. Then use find_by_template\
+			       UPDATE: I give an expecting record into \'91body\'92, and my function(Updating) can get modify the record\
+			       Delete: From my perspective, I think you mean that you want to delete some specific records found by its primary key. In this case, I don\'92t need to delete records through \'91body\'92. \
+			       For example, I will delete this record: api/people/jl5173
+\f1 .\
+Dependent Resources: GET: Because people and teams don\'a1\'aft have foreign keys, I divided this function into two different situations:\
+						1>.people(or teams)/primary_key/batting(appearances\'a1\'ad.): Since we can get primary keys and values from them through path first, and add them into template from\
+						    related tables, and use new template(dictionary) to get results through find_by_template\
+						2>batting(\'a1\'ad.)/primary_key/people(or teams): we can get record through \'a1\'afbatting(\'a1\'ad.)/primary_key\'a1\'af, but program only can return one result. And then we use \
+						    foreign keys(battingtopeople) as primary key to get information in the related tables. So in this situation, we can only find one record.\
+				   POST: Insert a new record in the related table.\
+(primary_key and foreign key queries:\
+PK:
+\f2\fs22 \cf2 "select COLUMN_NAME from (select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE  \\\cf0 \
+\pard\pardeftab720\partightenfactor0
+\cf2     WHERE TABLE_NAME = "\cf0 +\cf2 "'"\cf0 +table+\cf2 "'"\cf0 +\cf2 " ) as a \\\cf0 \
+\cf2     where a.CONSTRAINT_SCHEMA = 'lahman2017raw_pk' and CONSTRAINT_NAME = 'PRIMARY'"\
+\cf3 FK:\cf2 "select column_name from (select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE  \\\cf0 \
+\cf2         WHERE TABLE_NAME ="\cf0  +\cf2 "'"\cf0  + table + \cf2 "'"\cf0  +\cf2 ") as a \\\cf0 \
+\cf2         where a.CONSTRAINT_SCHEMA = 'lahman2017raw_pk' and REFERENCED_TABLE_NAME ="\cf0  + \cf2 "'"\cf0  +related_table+ \cf2 "'"
+\f1\fs24 \cf0 \
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+\cf0 b) Customer queries:\
+I designed three queries and only hold one or two variables in each query. And run their query with parameters. My original queries are:\
+For roster:\
+\pard\pardeftab720\partightenfactor0
+
+\f2\fs22 \cf2 "select c.playerid, d.nameLast, d.nameFirst,c.teamid,c.yearid,c.G_all,c.H,c.AB from \\\cf0 \
+\cf2         (select distinct a.playerid,a.teamid,a.yearid,a.G_all,b.H,b.AB from \\\cf0 \
+\cf2             (select \ul playerid\ulnone ,\ul teamid\ulnone ,\ul yearid\ulnone ,G_all from appearances "\cf0 + WhereClause + \cf2 " "\cf0  +\cf2 " \\\cf0 \
+\cf2                  ) as a \\\cf0 \
+\cf2             join \\\cf0 \
+\cf2             (select \ul playerid\ulnone ,\ul teamid\ulnone ,\ul yearid\ulnone ,H,AB from batting "\cf0  + WhereClause + \cf2 " "\cf0  +\cf2 "  \\\cf0 \
+\cf2                  ) as b \\\cf0 \
+\cf2         on \\\cf0 \
+\cf2             a.playerid = b.playerid) as c \\\cf0 \
+\cf2      join \\\cf0 \
+\cf2          people as d \\\cf0 \
+\cf2      on d.playerid = c.playerid"\
+\cf3 For career_stats:\
+\cf2 "select c.playerID,teamID,yearID,g_all,d.hits,d.ABs,d.A,d.E from appearances as c \\\cf0 \
+\cf2         join (select a.playerID,A,E,b.H as hits,b.AB as ABs from \\\cf0 \
+\cf2              (select playerID,A,E from Fielding) as a \\\cf0 \
+\cf2         join batting as b \\\cf0 \
+\cf2             on a.playerID = b.playerID) as d \\\cf0 \
+\cf2             on c.playerID = d.playerID "\cf0  + WhereClause\
+For teammates:\
+\cf2 "select e.playerID,e.teammate,e.first_year,e.last_year,count(*) as times \\\cf0 \
+\cf2 from (select c.playerID,c.teammate,c.yearID,c.teamID,d.first_year,d.last_year \\\cf0 \
+\cf2 from (select a.playerID,b.playerID as \ul teammate\ulnone ,a.yearID,a.teamID \\\cf0 \
+\cf2 from (select * from batting where playerID = "\cf0  + \cf2 " '"\cf0  + playerid +\cf2 "'"\cf0  +\cf2 " ) as a \\\cf0 \
+\cf2 join batting as b \\\cf0 \
+\cf2 on a.teamID = b.teamID and a.yearID = b.yearID) as c \\\cf0 \
+\cf2 join (select \ul playerid\ulnone ,\ul min\ulnone (yearID) as first_year,max(yearID) as last_year from batting group by \ul playerid\ulnone ) as d \\\cf0 \
+\cf2 on c.teammate = d.playerID) as e \\\cf0 \
+\cf2 group by e.playerID,e.teammate,e.first_year,e.last_year"\
+\
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 d) For Links:\
+I designed three possible links: previous, current, next. If len(result) is not more than 10(I set that ten records per page) there is only one link: current\
+Besides, I designed a function ( generate_links) to finish this mission. My original thinking is to transfer them into a string with a lot of determines,i,e, api/people?\'85.&limit=10 & offset=variables\
+In this case, for convenience, I default \'91&limit=10&offset=xxx\'92 or \'91?limit=10&offset=xxxx\'92 (no [?queries][&fields], we should begin with \'91?\'92) as the end of url.
+\f2\fs22 \
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs24 \cf0 \
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+\cf0 \
+\
+\
+\
+For my assignment, I provide you with 3 python files: SimpBO.py, Flask.py, customer.py.\
+I run Path and Customer Queries separately \
+\
+For SimpleBO:\
+\
+Introduction: I put all basic functions into this file, which can make codes in Flask.py more clear\
+\
+Functions:\
+a). Basic functions( including \
+\pard\pardeftab720\partightenfactor0
+
+\f2\fs22 \cf4 def\cf0  run_q(q, args, fetch=\cf4 False\cf0 ):\
+I used this function to connect my database, and run the queries to get what we want.\
+\
+\cf4 def\cf0  templateToWhereClause(t):\
+Transfer the dictionaries collected from request.args into WhereClause to queries\
+Notice: this function for request.args(i.e\{\'91playerID\'92:[\'91willite01\'92]\})
+\f1 , so if we want the value, we should use \'a1\'aevalue[0]\'a1\'af\
+\pard\pardeftab720\partightenfactor0
+
+\f2 \cf0 \
+\pard\pardeftab720\partightenfactor0
+\cf4 def\cf0  template_To_SETClause(t):\
+Transfer the dictionaries collected from request.args into SETClause to queries\
+In \'91POST\'92,\'92UPDATE\'92 operations, we should use \'92SET\'92 key words to execute queries.\
+\
+\cf4 def\cf0  template_To_Where_Clause(t):\
+Transfer the dictionaries collected from \'91body\'92 in postman into whereclause to queries.\
+Notice: this is different between with first function. Because the dictionaries we get from \'91body\'92 is \{\'91playerID\'92:\'92willite01\'92\},so if we want the value,\
+\
+\cf4 def\cf0  find_by_template(table,template,fields=\cf4 None\cf0 ,limit=\cf4 None\cf0 ,offset=\cf4 None\cf0 ):\
+This function can get results by parameters collected from i.e.(\'91/people?playerID=willite&\'85.)\
+\
+\cf4 def\cf0  args_to_str(in_args,offset=\cf4 None\cf0 ):\
+Transfer \'91in_args\'92 into string type.\
+\
+\cf4 def\cf0  fields_to_str(fields):\
+Transfer fields into to string ( for generate links)\
+\
+\cf4 def\cf0  generate_links(resource,result,args,url,url_root,limit=\cf4 None\cf0 ,offset=\cf4 None\cf0 ,fields=\cf4 None\cf0 ):\
+Generate links with \'91previous\'92(if exists), \'91next\'92(if exists), \'91current\'92\
+\
+\cf4 def\cf0  insert(table,s):\
+Insert new record\
+\
+\cf4 def\cf0  Updating(table,s,primary_key):\
+Modify records\
+\
+\cf4 def\cf0  Delete1(table,primary_key):\
+Delete records with primary_key in specific resources\
+\
+\cf4 def\cf0  pri_to_dic(table,primary_key):\
+Get primary_key from each table with query, and transfer them into dictionary\
+\
+\cf4 def\cf0  get_PK(table,primary_key,fields=\cf4 None\cf0 ,limit=\cf4 None\cf0 ,offset=\cf4 None\cf0 ):\
+Use \'91pri_to_dic\'92 to transfer PK to dictionary and use \'91find_by_template\'92 to get result\
+\
+\cf4 def\cf0  get_FK(table,primary_key,related_table,template=\cf4 None\cf0 ,fields=\cf4 None\cf0 ,limit=\cf4 None\cf0 ,offset=\cf4 None\cf0 ):\
+Get Foreign keys and transfer them to dictionary in order to get result by \'91find_by_template\'92\
+Notice: if some tables don\'92t have FK ( I.e.people/<primary_key>/batting), I just derive their primary key into a template and add this template into related resource\'92s template\
+Then use the new template to get result\
+\
+\cf4 def\cf0  career_stats(\ul playerid\ulnone ,limit,offset):\
+Customer Queries: search for records of one player.\
+\
+\cf4 def\cf0  roster(s,limit=\cf4 None\cf0 ,offset=\cf4 None\cf0 ):\
+Given teamID,yearID, we can get results about roster in each year about each team\
+\
+\cf4 def\cf0  find_teammate(playerid,limit,offset):\
+Given a playerid, we can find their teammates and data about \'91first year\'92 and \'91last year\'92 about his teammates. And also can calculate times when they were teammates.\
+\
+Flask.py:\
+\
+Introduction: This file can get parameters from url, and we can use them with functions in SimpleBO to create resources and get results.\
+\
+\
+Customer.py:\
+\
+Introduction: For convenience: I put three missions about queries into a new python file.}
